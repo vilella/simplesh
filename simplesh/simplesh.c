@@ -5,8 +5,8 @@
  * Departamento de Ingeniería y Tecnología de Computadores
  * Facultad de Informática de la Universidad de Murcia
  *
- * Alumnos: APELLIDOS, NOMBRE (GX.X)
- *          APELLIDOS, NOMBRE (GX.X)
+ * Alumnos: Vilella Trigueros, Alejandro (G2.2)
+ *          Cano, Alejandro (GX.X)
  *
  * Convocatoria: FEBRERO/JUNIO/JULIO
  */
