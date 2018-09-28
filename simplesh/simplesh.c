@@ -33,7 +33,8 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <limits.h>
- #include <libgen.h>
+#include <libgen.h>
+#include <stdbool.h>
 
 // Biblioteca readline
 #include <readline/readline.h>
@@ -757,12 +758,16 @@ struct cmd* null_terminate(struct cmd* cmd)
 
 /* Funciones realizadas por los alumnos */
 
-// FIXME ejercicio3
+// Ejercicio3
 void run_cwd(){
-	/*if (!getcwd(ruta, PATH_MAX)){
-		perror("getcwd");
-		exit(EXIT_FAILURE);
-	}*/
+  char ruta[PATH_MAX];
+  
+  if (!getcwd(ruta, PATH_MAX)){
+    perror("getcwd");
+    exit(EXIT_FAILURE);
+  }
+  
+  fprintf(stdout, "%s\n",ruta);
 }
 
 // FIXME ejercicio4
@@ -771,8 +776,19 @@ void run_exit(){
 }
 
 // FIXME ejercicio5
-void run_cd(){
+void run_cd(){}
 // Mostrar mensaje de error sin salir
+
+bool checkInterno(char * cmd){
+  if (strcmp(cmd, "cwd") == 0){
+    run_cwd();
+    return(true);
+  } else if (strcmp(cmd, "exit") == 0){
+    run_exit();
+    return(true);
+  }
+
+  return (false);
 }
 
 /****************************************/
@@ -811,9 +827,16 @@ void run_cmd(struct cmd* cmd)
         case EXEC:
 			//FIXME Comprobar si es interno llamando a una funcion
             ecmd = (struct execcmd*) cmd;
-            if (fork_or_panic("fork EXEC") == 0)
-                exec_cmd(ecmd);
-            TRY( wait(NULL) );
+            
+            if(ecmd->argv[0] != NULL && checkInterno(ecmd->argv[0])){
+
+            }else{
+              if (fork_or_panic("fork EXEC") == 0)
+              exec_cmd(ecmd);
+              TRY( wait(NULL) );
+              
+            }
+            
             break;
 
         case REDR:
@@ -1066,42 +1089,39 @@ void free_cmd(struct cmd* cmd)
 // biblioteca readline. Ésta permite mantener el historial, utilizar las flechas
 // para acceder a las órdenes previas del historial, búsquedas de órdenes, etc.
 
-char* get_cmd()
-{
-    char* buf;
+char* get_cmd(){
+  char* buf;
 
-	char ruta[PATH_MAX];
+  char ruta[PATH_MAX];
 
-	uid_t uid = getuid();
+  uid_t uid = getuid();
 
-	struct passwd * pw = getpwuid(uid);
+  struct passwd * pw = getpwuid(uid);
 
-	if (pw == NULL){
-		perror("getpwuid");
-		exit(EXIT_FAILURE);
-	}
-	
-	if (!getcwd(ruta, PATH_MAX)){
-		perror("getcwd");
-		exit(EXIT_FAILURE);
-	}
+  if (pw == NULL){
+    perror("getpwuid");
+    exit(EXIT_FAILURE);
+  }
 
-	char * directorio = basename(ruta);
+  if (!getcwd(ruta, PATH_MAX)){
+    perror("getcwd");
+    exit(EXIT_FAILURE);
+  }
 
-	char prompt[strlen(pw->pw_name)+strlen(directorio)+strlen("@< ")];
+  char * directorio = basename(ruta);
 
-	//FIXME ejercicio2
+  char prompt[strlen(pw->pw_name)+strlen(directorio)+strlen("@< ")];
 
-	sprintf(prompt, "%s@%s> ", pw->pw_name,directorio);
+  sprintf(prompt, "%s@%s> ", pw->pw_name,directorio);
 
-    // Lee la orden tecleada por el usuario
-    buf = readline(prompt);
+  // Lee la orden tecleada por el usuario
+  buf = readline(prompt);
 
-    // Si el usuario ha escrito una orden, almacenarla en la historia.
-    if(buf)
-        add_history(buf);
+  // Si el usuario ha escrito una orden, almacenarla en la historia.
+  if(buf)
+  add_history(buf);
 
-    return buf;
+  return buf;
 }
 
 
@@ -1169,6 +1189,9 @@ int main(int argc, char** argv)
 
         // Libera la memoria de las estructuras `cmd`
         free_cmd(cmd);
+        
+        // Libera la raíz del árbol
+//        free(cmd);
 
         // Libera la memoria de la línea de órdenes
         free(buf);
