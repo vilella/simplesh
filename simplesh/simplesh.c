@@ -5,8 +5,8 @@
  * Departamento de Ingeniería y Tecnología de Computadores
  * Facultad de Informática de la Universidad de Murcia
  *
- * Alumnos: Vilella Trigueros, Alejandro (G2.2)
- *          Cano, Alejandro (GX.X)
+ * Alumnos: APELLIDOS, NOMBRE (GX.X)
+ *          APELLIDOS, NOMBRE (GX.X)
  *
  * Convocatoria: FEBRERO/JUNIO/JULIO
  */
@@ -31,6 +31,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <pwd.h>
+#include <limits.h>
+ #include <libgen.h>
 
 // Biblioteca readline
 #include <readline/readline.h>
@@ -670,16 +673,17 @@ struct cmd* parse_redr(struct cmd* cmd, char** start_of_str, char* end_of_str)
             error("%s: error sintáctico: se esperaba un fichero", __func__);
 
         // Construye el `cmd` para la redirección
+	// Ejercicio 1
         switch(delimiter)
         {
             case '<':
-                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDONLY, 0, 0);
+                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDONLY, S_IRWXU, 0);
                 break;
             case '>':
-                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDWR|O_CREAT, 0, 1);
+                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDWR|O_CREAT|O_TRUNC, S_IRWXU, 1);
                 break;
             case '+': // >>
-                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDWR|O_CREAT, 0, 1);
+                cmd = redrcmd(cmd, start_of_token, end_of_token, O_RDWR|O_CREAT|O_APPEND, S_IRWXU, 1);
                 break;
         }
     }
@@ -751,6 +755,27 @@ struct cmd* null_terminate(struct cmd* cmd)
  * Funciones para la ejecución de la línea de órdenes
  ******************************************************************************/
 
+/* Funciones realizadas por los alumnos */
+
+// FIXME ejercicio3
+void run_cwd(){
+	/*if (!getcwd(ruta, PATH_MAX)){
+		perror("getcwd");
+		exit(EXIT_FAILURE);
+	}*/
+}
+
+// FIXME ejercicio4
+void run_exit(){
+	exit(EXIT_SUCCESS);
+}
+
+// FIXME ejercicio5
+void run_cd(){
+// Mostrar mensaje de error sin salir
+}
+
+/****************************************/
 
 void exec_cmd(struct execcmd* ecmd)
 {
@@ -779,9 +804,12 @@ void run_cmd(struct cmd* cmd)
 
     if(cmd == 0) return;
 
+
+
     switch(cmd->type)
     {
         case EXEC:
+			//FIXME Comprobar si es interno llamando a una funcion
             ecmd = (struct execcmd*) cmd;
             if (fork_or_panic("fork EXEC") == 0)
                 exec_cmd(ecmd);
@@ -793,7 +821,7 @@ void run_cmd(struct cmd* cmd)
             if (fork_or_panic("fork REDR") == 0)
             {
                 TRY( close(rcmd->fd) );
-                if ((fd = open(rcmd->file, rcmd->flags)) < 0)
+                if ((fd = open(rcmd->file, rcmd->flags, rcmd->mode)) < 0)
                 {
                     perror("open");
                     exit(EXIT_FAILURE);
@@ -1042,8 +1070,32 @@ char* get_cmd()
 {
     char* buf;
 
+	char ruta[PATH_MAX];
+
+	uid_t uid = getuid();
+
+	struct passwd * pw = getpwuid(uid);
+
+	if (pw == NULL){
+		perror("getpwuid");
+		exit(EXIT_FAILURE);
+	}
+	
+	if (!getcwd(ruta, PATH_MAX)){
+		perror("getcwd");
+		exit(EXIT_FAILURE);
+	}
+
+	char * directorio = basename(ruta);
+
+	char prompt[strlen(pw->pw_name)+strlen(directorio)+strlen("@< ")];
+
+	//FIXME ejercicio2
+
+	sprintf(prompt, "%s@%s> ", pw->pw_name,directorio);
+
     // Lee la orden tecleada por el usuario
-    buf = readline("simplesh> ");
+    buf = readline(prompt);
 
     // Si el usuario ha escrito una orden, almacenarla en la historia.
     if(buf)
