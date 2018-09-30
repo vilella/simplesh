@@ -767,28 +767,49 @@ void run_cwd(){
     exit(EXIT_FAILURE);
   }
   
-  fprintf(stdout, "%s\n",ruta);
+  fprintf(stdout, "cwd: %s\n",ruta);
 }
 
-// FIXME ejercicio4
+// Ejercicio 4
 void run_exit(){
 	exit(EXIT_SUCCESS);
 }
 
 // FIXME ejercicio5
-void run_cd(){}
-// Mostrar mensaje de error sin salir
+void run_cd(char * path){
+    
+    if (chdir(path) == -1){
+        perror("run_cd");
+    }
+    
+}
 
 bool checkInterno(char * cmd){
   if (strcmp(cmd, "cwd") == 0){
-    run_cwd();
+//    run_cwd();
     return(true);
   } else if (strcmp(cmd, "exit") == 0){
-    run_exit();
+//    run_exit();
     return(true);
+  } else if (strcmp(cmd, "cd") == 0){
+//    run_cd();
+    return true;
   }
 
   return (false);
+}
+
+void ejecutarFuncion(struct execcmd* ecmd){
+
+    if (strcmp(ecmd->argv[0], "cwd") == 0){
+        run_cwd();
+    } else if (strcmp(ecmd->argv[0], "exit") == 0){
+        run_exit();
+    } else if (strcmp(ecmd->argv[0], "cd") == 0){
+        // Le pasamo el directorio por parámetro
+        run_cd(ecmd->argv[1]);
+    }
+
 }
 
 /****************************************/
@@ -829,7 +850,7 @@ void run_cmd(struct cmd* cmd)
             ecmd = (struct execcmd*) cmd;
             
             if(ecmd->argv[0] != NULL && checkInterno(ecmd->argv[0])){
-
+                ejecutarFuncion(ecmd);
             }else{
               if (fork_or_panic("fork EXEC") == 0)
               exec_cmd(ecmd);
