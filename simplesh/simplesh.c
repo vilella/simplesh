@@ -776,38 +776,75 @@ void run_exit(){
 }
 
 // FIXME ejercicio5
-void run_cd(char * path){
+void run_cd(struct cmd* cmd){
     
-    if (chdir(path) == -1){
-        perror("run_cd");
+    struct execcmd* ecmd;
+	ecmd = (struct execcmd*) cmd;
+	// FIXME implementar con las variables de entorno HOME(directorio por defecto) y OLDPWD(directorio anterior)
+    char * path = ecmd->argv[1];
+	char ruta[PATH_MAX];
+	getcwd(ruta, PATH_MAX);
+
+    //printf("Estructura %s - %d\n", ecmd->argv[1], ecmd->argc);
+    if (ecmd->argc > 2){
+        fprintf(stderr, "run_cd: Demasiados argumentos\r\n");
+        return;
     }
+    
+	// Si path es NULL nos movemos al directorio home
+	if (path == NULL){
+
+		if (chdir(getenv("HOME")) == -1){
+			perror("run_cd");
+		}
+
+	} else if (strcmp(path,"-") == 0){
+
+		if (chdir(getenv("OLDPWD")) == -1){
+
+			fprintf(stderr, "run_cd: Variable OLDPWD no definida\r\n");
+
+		}
+
+	} else if (chdir(path) == -1){
+
+        fprintf(stderr, "run_cd: No existe el directorio '%s'\r\n", path);
+
+    } 
+
+	if (setenv("OLDPWD", ruta, 1) == -1){
+		perror("run_cd");
+	}
     
 }
 
-bool checkInterno(char * cmd){
-  if (strcmp(cmd, "cwd") == 0){
-//    run_cwd();
+bool checkInterno(struct cmd* cmd){
+
+	struct execcmd* ecmd;
+	ecmd = (struct execcmd*) cmd;
+
+  if (strcmp(ecmd->argv[0], "cwd") == 0){
     return(true);
-  } else if (strcmp(cmd, "exit") == 0){
-//    run_exit();
+  } else if (strcmp(ecmd->argv[0], "exit") == 0){
     return(true);
-  } else if (strcmp(cmd, "cd") == 0){
-//    run_cd();
+  } else if (strcmp(ecmd->argv[0], "cd") == 0){
     return true;
   }
 
   return (false);
 }
 
-void ejecutarFuncion(struct execcmd* ecmd){
+void ejecutarFuncion(struct cmd* cmd){
+
+	struct execcmd* ecmd;
+	ecmd = (struct execcmd*) cmd;
 
     if (strcmp(ecmd->argv[0], "cwd") == 0){
         run_cwd();
     } else if (strcmp(ecmd->argv[0], "exit") == 0){
         run_exit();
     } else if (strcmp(ecmd->argv[0], "cd") == 0){
-        // Le pasamo el directorio por parámetro
-        run_cd(ecmd->argv[1]);
+        run_cd(cmd);
     }
 
 }
@@ -846,12 +883,16 @@ void run_cmd(struct cmd* cmd)
     switch(cmd->type)
     {
         case EXEC:
-			//FIXME Comprobar si es interno llamando a una funcion
+			
             ecmd = (struct execcmd*) cmd;
             
-            if(ecmd->argv[0] != NULL && checkInterno(ecmd->argv[0])){
-                ejecutarFuncion(ecmd);
+			// Comprobar si es interno
+            if(ecmd->argv[0] != NULL && checkInterno(cmd)){
+
+                ejecutarFuncion(cmd);
+
             }else{
+
               if (fork_or_panic("fork EXEC") == 0)
               exec_cmd(ecmd);
               TRY( wait(NULL) );
@@ -862,6 +903,7 @@ void run_cmd(struct cmd* cmd)
 
         case REDR:
             rcmd = (struct redrcmd*) cmd;
+
             if (fork_or_panic("fork REDR") == 0)
             {
                 TRY( close(rcmd->fd) );
@@ -871,17 +913,27 @@ void run_cmd(struct cmd* cmd)
                     exit(EXIT_FAILURE);
                 }
 
-                if (rcmd->cmd->type == EXEC)
-                    exec_cmd((struct execcmd*) rcmd->cmd);
-                else
-                    run_cmd(rcmd->cmd);
-                exit(EXIT_SUCCESS);
+				if(checkInterno(rcmd->cmd)){
+
+                	ejecutarFuncion(rcmd->cmd);
+
+            	}else{
+
+		            if (rcmd->cmd->type == EXEC)
+		                exec_cmd((struct execcmd*) rcmd->cmd);
+		            else
+		                run_cmd(rcmd->cmd);
+				}
+                
             }
+
+            exit(EXIT_SUCCESS);
             TRY( wait(NULL) );
             break;
 
         case LIST:
             lcmd = (struct listcmd*) cmd;
+
             run_cmd(lcmd->left);
             run_cmd(lcmd->right);
             break;
@@ -901,12 +953,24 @@ void run_cmd(struct cmd* cmd)
                 TRY( dup(p[1]) );
                 TRY( close(p[0]) );
                 TRY( close(p[1]) );
-                if (pcmd->left->type == EXEC)
-                    exec_cmd((struct execcmd*) pcmd->left);
-                else
-                    run_cmd(pcmd->left);
-                exit(EXIT_SUCCESS);
-            }
+
+				// Comprobar
+				if(checkInterno(pcmd->left)){
+
+					ejecutarFuncion(pcmd->left);
+
+            	} else {
+
+		        	if (pcmd->left->type == EXEC)
+		        	    exec_cmd((struct execcmd*) pcmd->left);
+		        	else
+		            	run_cmd(pcmd->left);
+		        	
+				}
+				
+				exit(EXIT_SUCCESS);
+            	
+			}
 
             // Ejecución del hijo de la derecha
             if (fork_or_panic("fork PIPE right") == 0)
@@ -915,12 +979,24 @@ void run_cmd(struct cmd* cmd)
                 TRY( dup(p[0]) );
                 TRY( close(p[0]) );
                 TRY( close(p[1]) );
-                if (pcmd->right->type == EXEC)
-                    exec_cmd((struct execcmd*) pcmd->right);
-                else
-                    run_cmd(pcmd->right);
-                exit(EXIT_SUCCESS);
-            }
+
+				if(checkInterno(pcmd->right)){
+
+					ejecutarFuncion(pcmd->right);
+
+            	} else {
+
+			        if (pcmd->right->type == EXEC)
+			            exec_cmd((struct execcmd*) pcmd->right);
+			        else
+			            run_cmd(pcmd->right);
+			       
+				}
+
+				 exit(EXIT_SUCCESS);
+            	
+			}
+
             TRY( close(p[0]) );
             TRY( close(p[1]) );
 
@@ -933,10 +1009,18 @@ void run_cmd(struct cmd* cmd)
             bcmd = (struct backcmd*)cmd;
             if (fork_or_panic("fork BACK") == 0)
             {
-                if (bcmd->cmd->type == EXEC)
-                    exec_cmd((struct execcmd*) bcmd->cmd);
-                else
-                    run_cmd(bcmd->cmd);
+				if(checkInterno(bcmd->cmd)){
+
+					ejecutarFuncion(bcmd->cmd);
+
+            	} else {
+
+		            if (bcmd->cmd->type == EXEC)
+		                exec_cmd((struct execcmd*) bcmd->cmd);
+		            else
+		                run_cmd(bcmd->cmd);
+				}
+
                 exit(EXIT_SUCCESS);
             }
             break;
@@ -1048,7 +1132,7 @@ void free_cmd(struct cmd* cmd)
     switch(cmd->type)
     {
         case EXEC:
-	    free(cmd);
+//	    	free(cmd);
             break;
 
         case REDR:
@@ -1191,6 +1275,9 @@ int main(int argc, char** argv)
 
     DPRINTF(DBG_TRACE, "STR\n");
 
+	// FIXME Borrar variable de entorno OLDPWD???
+	unsetenv("OLDPWD");
+
     // Bucle de lectura y ejecución de órdenes
     while ((buf = get_cmd()) != NULL)
     {
@@ -1212,7 +1299,7 @@ int main(int argc, char** argv)
         free_cmd(cmd);
         
         // Libera la raíz del árbol
-//        free(cmd);
+        free(cmd);
 
         // Libera la memoria de la línea de órdenes
         free(buf);

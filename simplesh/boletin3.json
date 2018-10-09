@@ -1,0 +1,114 @@
+{
+    "setup": {
+        "desc": "B3",
+        "shell": "simplesh",
+        "prompt": "alumno@.*> ",
+        "timeout": 3,
+        "cmds": [
+            "dd if=/dev/urandom of=bytes bs=4k count=16k",
+            "(for l in $(seq 1 1000); do echo echo linea$l; done) > lineas"
+        ]
+    },
+    "tests": [
+        {
+            "cmd": "( echo 1; echo 2) > f1 ; ( echo 3; echo 4) > f2 ; hd -l 1 f1 f2",
+            "out": "^1\\r\\n3\\r\\n$"
+        },
+        {
+            "cmd": "hd -h | hd -l 1",
+            "out": "^Uso: hd \\[-l NLINES\\] \\[-b NBYTES\\] \\[-t BSIZE\\].*\\.\\.\\.\\r\\n$"
+        },
+        {
+            "cmd": "( echo 1; echo 2; echo 3; echo 4) | hd | wc -l",
+            "out": "^3.*\\r\\n"
+        },
+        {
+            "cmd": "( echo 1; echo 2; echo 3; echo 4; echo 5; echo 6) | hd -l 4",
+            "out": "^1\\r\\n2\\r\\n3\\r\\n4.*\\r\\n"
+        },
+        {
+            "cmd": "( echo 1; echo 2; echo 3; echo 4; echo 5; echo 6) | hd -l 4 | wc -l",
+            "out": "^4.*\\r\\n"
+        },
+        {
+            "cmd": "( echo 123456) | hd -b 2",
+            "out": "^12$"
+        },
+        {
+            "cmd": "( echo 123456) | hd -b 2 | wc -c",
+            "out": "^2\\r\\n$"
+        },
+        {
+            "cmd": "( echo 1; echo 2; echo 3; echo 4; echo 5; echo 6) | hd -b 4",
+            "out": "^1\\r\\n2\\r\\n$"
+        },
+        {
+            "cmd": "( echo 1; echo 2; echo 3; echo 4; echo 5; echo 6) | hd -b 4 | wc -c",
+            "out": "^4\\r\\n$"
+        },
+        {
+            "cmd": "( echo ) | hd | wc -c",
+            "out": "^1\\r\\n$"
+        },
+        {
+            "cmd": "( echo 123456 ) | hd -l 1 -b 1",
+            "out": "^hd: Opciones incompatibles.*\\r\\n"
+        },
+        {
+            "cmd": "( echo 123456 ) | hd -t 0",
+            "out": "^hd: Opción no válida.*\\r\\n"
+        },
+        {
+            "cmd": "hd nofile",
+            "out": "^hd: No se encontró el archivo 'nofile'\\r\\n$"
+        },
+        {
+            "cmd": "cat bytes | hd -b 67108864 -t 1048576 > more_bytes ; diff -s bytes more_bytes",
+            "out": "^Los archivos bytes y more_bytes son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "cat bytes | hd -b 67108864 -t 4096 > more_bytes ; diff -s bytes more_bytes",
+            "out": "^Los archivos bytes y more_bytes son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "cat bytes | hd -b 67108864 -t 64 > more_bytes ; diff -s bytes more_bytes",
+            "out": "^Los archivos bytes y more_bytes son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "cat bytes | hd -b 67108864 -t 4096 | wc -c",
+            "out": "^67108864\\r\\n$"
+        },
+        {
+            "cmd": "(cat bytes | hd -l 1000000 -t 1048576) > bf1 ; (cat bytes | head -1000000 ) > bf2 ; diff -s bf1 bf2",
+            "out": "^Los archivos bf1 y bf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "(cat bytes | hd -l 1000000 -t 4096) > bf1 ; (cat bytes | head -1000000 ) > bf2 ; diff -s bf1 bf2",
+            "out": "^Los archivos bf1 y bf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "(cat bytes | hd -l 1000000 -t 64) > bf1 ; (cat bytes | head -1000000 ) > bf2 ; diff -s bf1 bf2",
+            "out": "^Los archivos bf1 y bf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "cat bytes | hd -l 100 -t 4096 | wc -l",
+            "out": "100.*\\r\\n"
+        },
+        {
+            "cmd": "(cat lineas | hd -l 500 -t 1048576) > lf1 ; (cat lineas | head -500 ) > lf2 ; diff -s lf1 lf2",
+            "out": "^Los archivos lf1 y lf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "(cat lineas | hd -l 500 -t 4096) > lf1 ; (cat lineas | head -500 ) > lf2 ; diff -s lf1 lf2",
+            "out": "^Los archivos lf1 y lf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "(cat lineas | hd -l 500 -t 64) > lf1 ; (cat lineas | head -500 ) > lf2 ; diff -s lf1 lf2",
+            "out": "^Los archivos lf1 y lf2 son idénticos\\r\\n$"
+        },
+        {
+            "cmd": "cat lineas | hd -l 2000 -t 4096 | wc -l",
+            "out": "^1000\\r\\n$"
+        }
+    ]
+}
