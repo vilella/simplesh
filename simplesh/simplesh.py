@@ -1,8 +1,10 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8; -*-
 
+version="v.0.18.1"
+
 """
-    Testing `simplesh` v0.18.0 built on pexpect library:
+    Testing `simplesh` v0.18.1 built on pexpect library:
     https://pexpect.readthedocs.io/en/stable/index.html
 
     Ampliación de Sistemas Operativos (Curso 2018/2019)
@@ -150,7 +152,10 @@ class ShTest:
         try:
             cmds = config_d.get('cmds', '')
             for cmd in cmds:
-                subprocess.check_output(cmd.split(' '))
+                subprocess.run(cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=True, shell=True)
         except OSError:
             panic("Error: Setup command not found: '{}'.".format(cmd))
         except subprocess.CalledProcessError:
@@ -205,7 +210,7 @@ class ShTest:
             assert(not self.shproc.isalive())
             if not self.shproc.status:  # simplesh called exit(0)
                 try:
-                    self.result = (self.shproc.before.decode('utf-8')).strip()  # Remove '\r\n'
+                    self.result = (self.shproc.before.decode('utf-8'))
                 except UnicodeDecodeError:
                     self.status = ShStatus.NOPRINT
                 else:
@@ -216,18 +221,18 @@ class ShTest:
         else:
             assert(self.shproc.isalive())
             try:
-                self.result = self.shproc.before.decode('utf-8').strip()  # Remove '\r\n'
+                self.result = self.shproc.before.decode('utf-8')
             except UnicodeDecodeError:
                 self.status = ShStatus.NOPRINT
             else:
                 self.status = ShStatus.SUCCESS if re.match(self.out, self.result) else ShStatus.FAILURE
-                self.cmd = self.cmd.translate({ord(c): ' ' for c in '\r\n'})
-                self.result = self.result.translate({ord(c): ' ' for c in '\r\n'})
         finally:
             # Terminate process
             if self.shproc.isalive():
                 self.shproc.close(force=True)  # Try to terminate process with SIGHUP, SIGINT or SIGKILL
-            # self.shproc.isalive()          # Update exitstatus and signalstatus
+        # Notes:
+        #   - https://docs.python.org/3.6.5/library/re.html
+        #   - https://pexpect.readthedocs.io/en/stable/overview.html#find-the-end-of-line-cr-lf-conventions
 
     def print(self, debug=False):
 
@@ -246,13 +251,11 @@ class ShTest:
         if debug:
             print(header, end='')
             print("Command  : '{:60}'".format(self.cmd[:60]))
-            #exit_status = self.shproc.exitstatus if self.shproc.exitstatus is not None else self.shproc.signalstatus
-            #print("Status [{:3}/".format(exit_status), end='')
             if self.status == ShStatus.SUCCESS or self.status == ShStatus.FAILURE:
                 print(header, end='')
                 print("Expected : '{:60}'".format(self.out[:60]))
                 print(header, end='')
-                print("Produced : '{:60}'".format(self.result.strip('\r\n')[:60]))
+                print("Produced : '{:60}'".format(self.result[:60]))
                 print("{}: {}.T{:02}: Produced: ".format(os.path.basename(sys.argv[0]), ShTest.desc, self.id), end='')
                 print('{}'.format(list(self.result)))
             elif self.status == ShStatus.TIMEOUT:
@@ -272,6 +275,8 @@ class ShTest:
 def main():
 
     """ Main driver. """
+
+    info("Version: {}".format(version))
 
     # Parse command-line arguments
     args = parse_arguments()
