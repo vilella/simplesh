@@ -36,6 +36,11 @@
 #include <libgen.h>
 #include <stdbool.h>
 
+
+//FIXME preguntar si estas dos son validas
+#include <math.h>
+
+
 // Biblioteca readline
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -818,6 +823,96 @@ void run_cd(struct cmd* cmd){
     
 }
 
+
+// Comando hd
+void run_hd(struct execcmd* ecmd)
+{
+  int B_SIZE = 1024;
+  int opt, flag, n;
+  int flagl, flagb;
+  flagl = flagb = 0;
+  flag = n = 0;
+  optind = 1;
+  int numlineas,numbytes;
+  numlineas = numbytes = 0;
+
+  while ((opt = getopt(ecmd->argc,ecmd->argv, "l:b:t:h")) != -1) {
+    switch (opt) {
+      case 'l':
+          flagl= 1;
+          numlineas = atoi(optarg);
+          break;
+      case 'b':
+          flagb = 1;
+          numbytes = atoi(optarg);
+          break;
+      case 'h':
+          fprintf(stdout,"Uso: hd [-l NLINES] [-b NBYTES] [-t BSIZE] [FILE1] [FILE2 ]... \n");
+          fprintf(stdout,"\tOpciones: \n");
+          fprintf(stdout,"\t-l NLINES Numero maximo de lineas a mostrar. \n");
+          fprintf(stdout,"\t-b NBYTES Numero maximo de  bytes a mostrar. \n");
+          fprintf(stdout,"\t-t BSIZE   Tamaño en  bytes  de los  bloques  leidos de [FILEn] o stdin. \n");
+          fprintf(stdout,"\t-h help \n");
+          return;
+          break;
+      case 't':
+      B_SIZE = atoi(optarg);
+          if(1 < B_SIZE || B_SIZE > pow (2, 20)){
+            fprintf(stderr, "USO: %s [-t] debe tener un valor comprendido entre 1 y 2^20\n", ecmd->argv[0]);
+            B_SIZE=1024;
+          }
+          break;
+      default:
+          fprintf(stderr, "Usage: %s [-f] [-n NUM]\n", ecmd->argv[0]);
+          exit(EXIT_FAILURE); // Se termina la ejecución o solo sale de la función???
+    }
+  }
+
+  char buf[B_SIZE];
+
+  // Cuando el usuario introduce las opciones -l y -b
+  if (flagb == 1 && flagl == 1){
+    fprintf(stderr, "hd: Opciones incompatibles\n");
+  }
+
+
+  if(ecmd->argc==0){ //Si no recibe argumentos y solo se pulsa hd se leia de la entrada standard (preguntar profesor)
+    read(0,buf,B_SIZE); //pongo 0 porque es el descriptor de fichero de la entrada standard
+  }
+
+    if(ecmd->argv[0] != NULL){
+    int descriptor_fichero = open(ecmd->argv[0],O_RDONLY);
+    if(descriptor_fichero == -1){
+      perror("open");
+      exit(EXIT_FAILURE);
+    }else{
+      //Sin opciones b y l
+      if(flagb==0 && flagl==0){
+        while (read(descriptor_fichero,buf,B_SIZE) != 0){ //0 es cuando se ha leido entero el fichero
+          //Aqui iria el tratamiento de cuando se llama sin las opciones b y l
+        }
+      }
+
+      if(flagb==0 && flagl==1){ //con opcion l
+        //Aqui iria el tratamiento de cuando se llama con la opcion l
+      }
+
+      if(flagb==1 && flagl==0){ //con opcion l
+        //Aqui iria el tratamiento de cuando se llama con la opcion b
+        int bytesleidos = 0;
+        while (read(descriptor_fichero,buf,B_SIZE) != 0 && bytesleidos != numbytes){ //0 es cuando se ha leido entero el fichero
+          //Aqui iria el tratamiento de cuando se llama sin las opciones b y l
+          bytesleidos += read(descriptor_fichero,buf,B_SIZE);
+        }
+      }
+
+
+    }
+
+  }
+}
+
+
 // Comando src
 void run_src(struct execcmd* ecmd){
 
@@ -850,7 +945,9 @@ bool checkInterno(struct cmd* cmd){
     return(true);
   } else if (strcmp(ecmd->argv[0], "cd") == 0){
     return true;
-  }else if (strcmp(ecmd->argv[0], "src") == 0){
+  } else if (strcmp(ecmd->argv[0], "hd") == 0){
+    return true;
+  } else if (strcmp(ecmd->argv[0], "src") == 0){
     return true;
   }
 
@@ -868,6 +965,8 @@ void ejecutarFuncion(struct cmd* cmd){
         run_exit();
     } else if (strcmp(ecmd->argv[0], "cd") == 0){
         run_cd(cmd);
+    } else if (strcmp(ecmd->argv[0], "hd") == 0){
+        run_hd(ecmd);
     } else if (strcmp(ecmd->argv[0], "src") == 0){
         run_src(ecmd);
     }
