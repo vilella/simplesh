@@ -787,7 +787,7 @@ void run_cd(struct cmd* cmd){
 
     //printf("Estructura %s - %d\n", ecmd->argv[1], ecmd->argc);
     if (ecmd->argc > 2){
-        fprintf(stderr, "run_cd: Demasiados argumentos\r\n");
+        fprintf(stderr, "run_cd: Demasiados argumentos\n");
         return;
     }
     
@@ -802,13 +802,13 @@ void run_cd(struct cmd* cmd){
 
 		if (chdir(getenv("OLDPWD")) == -1){
 
-			fprintf(stderr, "run_cd: Variable OLDPWD no definida\r\n");
+			fprintf(stderr, "run_cd: Variable OLDPWD no definida\n");
 
 		}
 
 	} else if (chdir(path) == -1){
 
-        fprintf(stderr, "run_cd: No existe el directorio '%s'\r\n", path);
+        fprintf(stderr, "run_cd: No existe el directorio '%s'\n", path);
 
     } 
 
@@ -816,6 +816,27 @@ void run_cd(struct cmd* cmd){
 		perror("run_cd");
 	}
     
+}
+
+// Comando src
+void run_src(struct execcmd* ecmd){
+
+    int opt, flag, n;
+    optind = 1;
+    
+    while ((opt = getopt(ecmd->argc, ecmd->argv, "d:h")) != -1){
+        switch(opt){
+            case 'h':
+                fprintf(stdout, "Uso: src [-d DELIM] [FILE1] [FILE2]...\n");
+                fprintf(stdout, "\tOpciones:\n");
+                fprintf(stdout, "\t-d DELIM Caracteres de inicio de comentarios.\n");
+                fprintf(stdout, "\t-h help\n");
+                break;
+           case 'd':
+           break;
+        }
+    }
+
 }
 
 bool checkInterno(struct cmd* cmd){
@@ -828,6 +849,8 @@ bool checkInterno(struct cmd* cmd){
   } else if (strcmp(ecmd->argv[0], "exit") == 0){
     return(true);
   } else if (strcmp(ecmd->argv[0], "cd") == 0){
+    return true;
+  }else if (strcmp(ecmd->argv[0], "src") == 0){
     return true;
   }
 
@@ -845,6 +868,8 @@ void ejecutarFuncion(struct cmd* cmd){
         run_exit();
     } else if (strcmp(ecmd->argv[0], "cd") == 0){
         run_cd(cmd);
+    } else if (strcmp(ecmd->argv[0], "src") == 0){
+        run_src(ecmd);
     }
 
 }
@@ -924,10 +949,13 @@ void run_cmd(struct cmd* cmd)
 		            else
 		                run_cmd(rcmd->cmd);
 				}
+				// Deshacer la redirección
+				// PISTA: utilizar dup2();
+				exit(EXIT_SUCCESS);
                 
             }
 
-            exit(EXIT_SUCCESS);
+            
             TRY( wait(NULL) );
             break;
 
