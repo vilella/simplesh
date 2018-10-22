@@ -35,9 +35,6 @@
 #include <limits.h>
 #include <libgen.h>
 #include <stdbool.h>
-
-
-//FIXME preguntar si estas dos son validas
 #include <math.h>
 
 
@@ -52,6 +49,8 @@
 
 
 static const char* VERSION = "0.18";
+
+static pid_t pidd; // Para guardar el pid del proceso en segundo plano
 
 // Niveles de depuración
 #define DBG_CMD   (1 << 0)
@@ -92,6 +91,9 @@ static int g_dbg_level = 0;
 
 // Número máximo de argumentos de un comando
 #define MAX_ARGS 16
+
+//2^20 -> Veo mejor la opción de 1024*1024, creo que es menor carga para el sistema
+#define MAX_BSIZE (1024 * 1024)
 
 
 // Delimitadores
@@ -766,13 +768,14 @@ struct cmd* null_terminate(struct cmd* cmd)
 // Ejercicio3
 void run_cwd(){
   char ruta[PATH_MAX];
-  
+
   if (!getcwd(ruta, PATH_MAX)){
     perror("getcwd");
     exit(EXIT_FAILURE);
   }
-  
+
   fprintf(stdout, "cwd: %s\n",ruta);
+
 }
 
 // Ejercicio 4
@@ -780,13 +783,12 @@ void run_exit(){
 	exit(EXIT_SUCCESS);
 }
 
-// FIXME ejercicio5
+
 void run_cd(struct cmd* cmd){
-    
+
     struct execcmd* ecmd;
 	ecmd = (struct execcmd*) cmd;
-	// FIXME implementar con las variables de entorno HOME(directorio por defecto) y OLDPWD(directorio anterior)
-    char * path = ecmd->argv[1];
+	char * path = ecmd->argv[1];
 	char ruta[PATH_MAX];
 	getcwd(ruta, PATH_MAX);
 
@@ -795,7 +797,7 @@ void run_cd(struct cmd* cmd){
         fprintf(stderr, "run_cd: Demasiados argumentos\n");
         return;
     }
-    
+
 	// Si path es NULL nos movemos al directorio home
 	if (path == NULL){
 
@@ -815,12 +817,12 @@ void run_cd(struct cmd* cmd){
 
         fprintf(stderr, "run_cd: No existe el directorio '%s'\n", path);
 
-    } 
+    }
 
 	if (setenv("OLDPWD", ruta, 1) == -1){
 		perror("run_cd");
 	}
-    
+
 }
 
 
@@ -828,87 +830,124 @@ void run_cd(struct cmd* cmd){
 void run_hd(struct execcmd* ecmd)
 {
   int B_SIZE = 1024;
-  int opt, flag, n;
+  int opt;
   int flagl, flagb;
   flagl = flagb = 0;
-  flag = n = 0;
   optind = 1;
   int numlineas,numbytes;
   numlineas = numbytes = 0;
+  int descriptor_fichero = 0;
+
+  // Antes de usar read o write hay que usar open para abrir el fichero, open te devulve el descriptor
+  // de fichero y con eso puedes apuntar al fichero que se abre
 
   while ((opt = getopt(ecmd->argc,ecmd->argv, "l:b:t:h")) != -1) {
     switch (opt) {
       case 'l':
-          flagl= 1;
-          numlineas = atoi(optarg);
-          break;
+      flagl= 1;
+      numlineas = atoi(optarg);
+      break;
       case 'b':
-          flagb = 1;
-          numbytes = atoi(optarg);
-          break;
+      flagb = 1;
+      numbytes = atoi(optarg);
+      break;
       case 'h':
-          fprintf(stdout,"Uso: hd [-l NLINES] [-b NBYTES] [-t BSIZE] [FILE1] [FILE2 ]... \n");
-          fprintf(stdout,"\tOpciones: \n");
-          fprintf(stdout,"\t-l NLINES Numero maximo de lineas a mostrar. \n");
-          fprintf(stdout,"\t-b NBYTES Numero maximo de  bytes a mostrar. \n");
-          fprintf(stdout,"\t-t BSIZE   Tamaño en  bytes  de los  bloques  leidos de [FILEn] o stdin. \n");
-          fprintf(stdout,"\t-h help \n");
-          return;
-          break;
+      fprintf(stdout,"Uso: hd [-l NLINES] [-b NBYTES] [-t BSIZE] [FILE1] [FILE2 ]... \n");
+      fprintf(stdout,"\tOpciones: \n");
+      fprintf(stdout,"\t-l NLINES Numero maximo de lineas a mostrar. \n");
+      fprintf(stdout,"\t-b NBYTES Numero maximo de  bytes a mostrar. \n");
+      fprintf(stdout,"\t-t BSIZE   Tamaño en  bytes  de los  bloques  leidos de [FILEn] o stdin. \n");
+      fprintf(stdout,"\t-h help \n");
+      return;
+      break;
       case 't':
       B_SIZE = atoi(optarg);
-          if(1 < B_SIZE || B_SIZE > pow (2, 20)){
-            fprintf(stderr, "USO: %s [-t] debe tener un valor comprendido entre 1 y 2^20\n", ecmd->argv[0]);
-            B_SIZE=1024;
-          }
-          break;
+      if(1 > B_SIZE || B_SIZE > MAX_BSIZE){
+        fprintf(stderr, "hd: Opcion no valida");
+        B_SIZE=1024;
+      }
+      break;
       default:
-          fprintf(stderr, "Usage: %s [-f] [-n NUM]\n", ecmd->argv[0]);
-          exit(EXIT_FAILURE); // Se termina la ejecución o solo sale de la función???
+      fprintf(stderr, "Usage: %s [-f] [-n NUM]\n", ecmd->argv[0]);
+      exit(EXIT_FAILURE);
     }
   }
+
 
   char buf[B_SIZE];
 
   // Cuando el usuario introduce las opciones -l y -b
   if (flagb == 1 && flagl == 1){
     fprintf(stderr, "hd: Opciones incompatibles\n");
+    return;
   }
 
-
-  if(ecmd->argc==0){ //Si no recibe argumentos y solo se pulsa hd se leia de la entrada standard (preguntar profesor)
-    read(0,buf,B_SIZE); //pongo 0 porque es el descriptor de fichero de la entrada standard
+  int numOpciones = 0;
+  if (flagb == 1){
+    numOpciones+=2;
+  }
+  if (flagl == 1){
+    numOpciones+=2;
   }
 
-    if(ecmd->argv[0] != NULL){
-    int descriptor_fichero = open(ecmd->argv[0],O_RDONLY);
-    if(descriptor_fichero == -1){
-      perror("open");
-      exit(EXIT_FAILURE);
-    }else{
-      //Sin opciones b y l
-      if(flagb==0 && flagl==0){
-        while (read(descriptor_fichero,buf,B_SIZE) != 0){ //0 es cuando se ha leido entero el fichero
-          //Aqui iria el tratamiento de cuando se llama sin las opciones b y l
+  int numFicheros = ((ecmd->argc) - numOpciones - 1);
+  int fd[numFicheros];
+
+  if(numFicheros==0){ //Si no recibe argumentos y solo se pulsa hd se leia de la entrada standard (preguntar profesor)
+  
+    if (flagb == 0 && flagl == 0) {
+        int lineas = 0;
+        while(lineas < 3){
+          int leidos = read(0,buf,B_SIZE); //pongo 0 porque es el descriptor de fichero de la entrada standard
+          write(1,buf,leidos); //Se lee lo que se escribe de la entrada standard
+          lineas++;
         }
-      }
+    }
+    // FIXME Añadir opciones -l y -b cuando no hay ficheros
+  } else {
 
-      if(flagb==0 && flagl==1){ //con opcion l
-        //Aqui iria el tratamiento de cuando se llama con la opcion l
+    for (int j = 0; j < numFicheros; j++){
+      fd[j] = open(ecmd->argv[ecmd->argc-numFicheros+j],O_RDONLY);
+      if(fd[j] == -1){
+        perror("open");
+        exit(EXIT_FAILURE);
       }
-
-      if(flagb==1 && flagl==0){ //con opcion l
-        //Aqui iria el tratamiento de cuando se llama con la opcion b
-        int bytesleidos = 0;
-        while (read(descriptor_fichero,buf,B_SIZE) != 0 && bytesleidos != numbytes){ //0 es cuando se ha leido entero el fichero
-          //Aqui iria el tratamiento de cuando se llama sin las opciones b y l
-          bytesleidos += read(descriptor_fichero,buf,B_SIZE);
-        }
-      }
-
 
     }
 
+    if(flagl==1){ //con opcion l
+      for (int i = 0; i < numFicheros; i++){
+        descriptor_fichero = fd[i];
+        int saltos = 0;
+        int indice = 0;
+        int bytesleidos=0;
+        while ((bytesleidos = read(descriptor_fichero,buf,B_SIZE)) != EOF && saltos < numlineas){
+          for(indice=0; indice < bytesleidos && saltos < numlineas; indice++){
+            if(buf[indice]=='\n'){    
+              saltos++;
+            }
+            write(1,buf,indice);//FIXME problema al escribir los bytes leidos
+            fprintf(stdout,"\n");
+          }
+        }
+        
+      }
+    }
+
+    if(flagb==1){ //con opcion b
+      for (int i = 0; i < numFicheros; i++){
+
+        descriptor_fichero = fd[i];
+        int bytesleidos = 0;
+        while (bytesleidos <= numbytes && (bytesleidos = read(descriptor_fichero,buf,numbytes)) != EOF){
+
+          if(bytesleidos > numbytes){
+            write(1,buf,numbytes);
+          }
+          bytesleidos += read(descriptor_fichero,buf,B_SIZE);
+        }
+      }
+    }
   }
 }
 
@@ -916,8 +955,15 @@ void run_hd(struct execcmd* ecmd)
 // Comando src
 void run_src(struct execcmd* ecmd){
 
-    int opt, flag, n;
+    int opt, flagd, n;
     optind = 1;
+    flagd = 0;
+    char comentario = '%';
+    int numOpciones = 0;
+    int numFicheros = 0;
+    int bytesLeidos = 0;
+    int B_SIZE = 1024;
+    char buf[B_SIZE];
     
     while ((opt = getopt(ecmd->argc, ecmd->argv, "d:h")) != -1){
         switch(opt){
@@ -928,9 +974,33 @@ void run_src(struct execcmd* ecmd){
                 fprintf(stdout, "\t-h help\n");
                 break;
            case 'd':
+                flagd = 1;
+                if (strlen(optarg) != 1){
+                    fprintf(stderr, "src: Opcion no valida\n");
+                    return;
+                }
+                comentario = optarg[0];
+
+                numOpciones+=2;
            break;
+           
         }
     }
+    
+    numFicheros = ecmd->argc-numOpciones;
+    int i = 0;
+    if (numFicheros == 0){
+          int lineas = 0;
+        while(lineas < 3){
+          int leidos = read(0,buf,B_SIZE); //pongo 0 porque es el descriptor de fichero de la entrada standard
+          write(1,buf,leidos); //Se lee lo que se escribe de la entrada standard
+          lineas++;
+        }
+        
+    }
+
+    
+    
 
 }
 
@@ -973,6 +1043,40 @@ void ejecutarFuncion(struct cmd* cmd){
 
 }
 
+//EJERCICIO 1: Tratamiento de las señales. Bloqueo SIGINT y SIGQUIT
+void ignorarSignal(){
+
+    // Para ignorar SIGQUIT
+   sigset_t ignorar_signal;
+   sigemptyset(&ignorar_signal);
+   sigaddset(&ignorar_signal, SIGQUIT);
+	
+   if (sigprocmask(SIG_SETMASK, &ignorar_signal, NULL) == -1) {
+        perror("sigprocmask");
+        exit(EXIT_FAILURE);
+   }
+}
+
+void bloquearSignal(){
+
+    // Para bloquear SIGINT
+   sigset_t bloquear_signal;
+   sigemptyset(&bloquear_signal);
+   sigaddset(&bloquear_signal, SIGINT);
+	
+   if (sigprocmask(SIG_BLOCK, &bloquear_signal, NULL) == -1) {
+        perror("sigprocmask");
+        exit(EXIT_FAILURE);
+   }
+}
+
+void manejadorSignals(){
+   
+   ignorarSignal();
+   bloquearSignal();
+   		
+}
+
 /****************************************/
 
 void exec_cmd(struct execcmd* ecmd)
@@ -997,17 +1101,22 @@ void run_cmd(struct cmd* cmd)
     struct subscmd* scmd;
     int p[2];
     int fd;
+    int B_SIZE = 1024;
+    char buf[B_SIZE];
+
+    // Para restablcer la redirección
+    int saved_stdout;
 
     DPRINTF(DBG_TRACE, "STR\n");
 
     if(cmd == 0) return;
 
 
-
+    // FIXME Todos los wait(null) cambiar por waitpid(pid)
     switch(cmd->type)
     {
         case EXEC:
-			
+
             ecmd = (struct execcmd*) cmd;
             
 			// Comprobar si es interno
@@ -1017,44 +1126,51 @@ void run_cmd(struct cmd* cmd)
 
             }else{
 
-              if (fork_or_panic("fork EXEC") == 0)
-              exec_cmd(ecmd);
+              if (fork_or_panic("fork EXEC") == 0){
+                exec_cmd(ecmd);
+              }
               TRY( wait(NULL) );
-              
+
             }
-            
+
             break;
 
         case REDR:
             rcmd = (struct redrcmd*) cmd;
+            
 
             if (fork_or_panic("fork REDR") == 0)
             {
-                TRY( close(rcmd->fd) );
                 if ((fd = open(rcmd->file, rcmd->flags, rcmd->mode)) < 0)
                 {
                     perror("open");
                     exit(EXIT_FAILURE);
                 }
-
-				if(checkInterno(rcmd->cmd)){
-
-                	ejecutarFuncion(rcmd->cmd);
-
-            	}else{
-
-		            if (rcmd->cmd->type == EXEC)
-		                exec_cmd((struct execcmd*) rcmd->cmd);
-		            else
-		                run_cmd(rcmd->cmd);
-				}
-				// Deshacer la redirección
-				// PISTA: utilizar dup2();
-				exit(EXIT_SUCCESS);
+                //FIXME arreglar la redirección
+                TRY( dup2(0, fd) );
+                TRY( close(rcmd->fd) );
                 
+                if (checkInterno(rcmd->cmd)){
+                    ejecutarFuncion(rcmd->cmd);
+                } else {
+                    if (rcmd->cmd->type == EXEC){
+                        exec_cmd((struct execcmd*) rcmd->cmd);
+                    }else{
+                        run_cmd(rcmd->cmd);
+                    }
+    			}
+
+    			// Deshacer la redirección
+			    // PISTA: utilizar dup2();
+			    // Restaurar stdout
+			    //dup2(fd, 0);
+    			//close(fd);
+			    exit(EXIT_SUCCESS);
+
             }
 
-            
+
+
             TRY( wait(NULL) );
             break;
 
@@ -1063,6 +1179,7 @@ void run_cmd(struct cmd* cmd)
 
             run_cmd(lcmd->left);
             run_cmd(lcmd->right);
+
             break;
 
         case PIPE:
@@ -1092,11 +1209,11 @@ void run_cmd(struct cmd* cmd)
 		        	    exec_cmd((struct execcmd*) pcmd->left);
 		        	else
 		            	run_cmd(pcmd->left);
-		        	
+
 				}
-				
+
 				exit(EXIT_SUCCESS);
-            	
+
 			}
 
             // Ejecución del hijo de la derecha
@@ -1117,25 +1234,31 @@ void run_cmd(struct cmd* cmd)
 			            exec_cmd((struct execcmd*) pcmd->right);
 			        else
 			            run_cmd(pcmd->right);
-			       
+
 				}
 
 				 exit(EXIT_SUCCESS);
-            	
+
 			}
 
             TRY( close(p[0]) );
             TRY( close(p[1]) );
 
             // Esperar a ambos hijos
-            TRY( wait(NULL) );
-            TRY( wait(NULL) );
+            TRY( wait(NULL) );   // waitpid();
+            TRY( wait(NULL) );   // 
             break;
 
         case BACK:
             bcmd = (struct backcmd*)cmd;
-            if (fork_or_panic("fork BACK") == 0)
+            
+            if ((pidd = fork_or_panic("fork BACK")) == 0)
             {
+                printf("\nHago fork\n");
+                printf("pid: %d\n", pidd);
+                // Despues del fork ejercicio 2 [PID]
+                fprintf(stdout, "[%d]", pidd);
+                // Almacenar PID en un array tam8
 				if(checkInterno(bcmd->cmd)){
 
 					ejecutarFuncion(bcmd->cmd);
@@ -1150,6 +1273,11 @@ void run_cmd(struct cmd* cmd)
 
                 exit(EXIT_SUCCESS);
             }
+            
+            fprintf(stdout, "[%d]", pidd);
+            
+            TRY( waitpid(pidd, NULL, 0) );
+            // Hacer wait para esperar al hijo  --> waitpid(pid);
             break;
 
         case SUBS:
@@ -1398,6 +1526,8 @@ int main(int argc, char** argv)
     char* buf;
     struct cmd* cmd;
 
+    // FIXME Hacer el ejercicio 1 de las señales
+    manejadorSignals();
     parse_args(argc, argv);
 
     DPRINTF(DBG_TRACE, "STR\n");
@@ -1424,7 +1554,7 @@ int main(int argc, char** argv)
 
         // Libera la memoria de las estructuras `cmd`
         free_cmd(cmd);
-        
+
         // Libera la raíz del árbol
         free(cmd);
 
